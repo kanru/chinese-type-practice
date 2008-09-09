@@ -6,16 +6,90 @@
 #include <time.h>
 #include <string.h>
 
-#include "structs.h"
+struct unit
+{
+    gchar *v;
+    double x;
+    double y;
+};
+typedef struct unit unit_t;
 
 int gwidth, gheight;
 GArray *units;
 int score;
+int hp = 100;
 float speed;
+
+/**
+ * Range: 4421-7D4B
+ * EUC-TW: 0x8EA18080
+ */
+static gchar* generate_word()
+{
+    guchar in[] = {0x8E, 0xA1, 0x80, 0x80};
+    gchar *out;
+    guchar w;
+    do {
+        w = random() % 0x7E;
+    } while (w <= 0x44 || w > 0x7D);
+    in[2] += w;
+    do {
+        w = random() % 0x7E;
+    } while (w <= 0x20 || w > (in[2] == 0xFD ? 0x4B : 0x7D));
+    in[3] += w;
+    out = g_convert(in, sizeof(in), "UTF-8", "EUC-TW", NULL, NULL, NULL);
+    return out;
+}
+
+static void display_gameover(cairo_t *cr)
+{
+    char s[10];
+    PangoLayout *layout;
+    PangoFontDescription *desc;
+    int w, h;
+    layout = pango_cairo_create_layout(cr);
+    desc = pango_font_description_from_string("Serif Bold 72");
+    pango_layout_set_font_description(layout, desc);
+    pango_font_description_free(desc);
+    cairo_save(cr);
+    cairo_set_source_rgb(cr, 1., 0., 0.);
+    pango_layout_set_text(layout, "GAME OVER", -1);
+    pango_layout_get_pixel_size(layout, &w, &h);
+    cairo_move_to(cr, -w/2., -h/2.);
+    pango_cairo_show_layout (cr, layout);
+    cairo_restore(cr);
+    g_object_unref (layout);
+}
+
+static void display_score(cairo_t *cr)
+{
+    char s[10];
+    PangoLayout *layout;
+    PangoFontDescription *desc;
+    int w, h;
+    layout = pango_cairo_create_layout(cr);
+    desc = pango_font_description_from_string("Sans Bold 35");
+    pango_layout_set_font_description(layout, desc);
+    pango_font_description_free(desc);
+    cairo_save(cr);
+    cairo_set_source_rgba(cr, 1., 1., 1., .5);
+    g_snprintf(s, sizeof(s), "%03d", score);
+    pango_layout_set_text(layout, s, -1);
+    pango_layout_get_pixel_size(layout, &w, &h);
+    cairo_move_to(cr, -w/2., -gheight*5./12.-h/2.);
+    pango_cairo_show_layout (cr, layout);
+    g_snprintf(s, sizeof(s), "%03d", hp);
+    pango_layout_set_text(layout, s, -1);
+    pango_layout_get_pixel_size(layout, &w, &h);
+    cairo_move_to(cr, -w/2., gheight*5./12.-h/2.);
+    pango_cairo_show_layout (cr, layout);
+    cairo_restore(cr);
+    g_object_unref (layout);
+}
 
 static void display_units(cairo_t *cr)
 {
-    int i;
+    int i, h, w;
     unit_t u;
     PangoLayout *layout;
     PangoFontDescription *desc;
@@ -28,8 +102,9 @@ static void display_units(cairo_t *cr)
     if(units)
         for(i = 0; i < units->len; ++i) {
             u = g_array_index(units, unit_t, i);
-            cairo_move_to(cr, u.x, u.y);
             pango_layout_set_text(layout, u.v, -1);
+            pango_layout_get_pixel_size(layout, &w, &h);
+            cairo_move_to(cr, u.x-w/2., u.y-h/2.);
             pango_cairo_show_layout (cr, layout);
         }
     cairo_restore(cr);
@@ -52,7 +127,10 @@ static gboolean update_da(GtkWidget *w, GdkEventExpose *ev, gpointer ud)
     cairo_stroke(cr);
     cairo_arc(cr, 0., 0., 50., 0., 2.*M_PI);
     cairo_fill(cr);
+    display_score(cr);
     display_units(cr);
+    if(hp <= 0)
+        display_gameover(cr);
     cairo_destroy(cr);
     return TRUE;
 }
@@ -63,19 +141,6 @@ static void size_allocate(GtkWidget *w, GtkAllocation *alloc, gpointer ud)
     gheight = alloc->height;
 }
 
-static void create_units()
-{
-    int i;
-    unit_t t;
-    units = g_array_new(TRUE, TRUE, sizeof(unit_t));
-    t.v = g_strdup("測");
-    for(i = 0; i < 10; ++i) {
-        t.x = random() % gwidth;
-        t.y = random() % gheight;
-        g_array_append_val(units, t);
-    }
-}
-
 static gboolean im_commit(GtkIMContext *imctx, gchar *str, gpointer ud)
 {
     int i;
@@ -84,7 +149,9 @@ static gboolean im_commit(GtkIMContext *imctx, gchar *str, gpointer ud)
         for(i = 0; i < units->len; ++i) {
             u = g_array_index(units, unit_t, i);
             if (!strcmp(str, u.v)) {
+                g_free(u.v);
                 g_array_remove_index_fast(units, i);
+                score++;
                 break;
             }
         }
@@ -94,6 +161,11 @@ static gboolean im_commit(GtkIMContext *imctx, gchar *str, gpointer ud)
 static gboolean on_key_pressed(GtkWidget *w, GdkEventKey *ev, gpointer ud)
 {
     gboolean ret = gtk_im_context_filter_keypress(GTK_IM_CONTEXT(ud), ev);
+    switch(ev->keyval) {
+        case 'q':
+            gtk_main_quit();
+            break;
+    }
     return ret;
 }
 
@@ -112,13 +184,45 @@ static gboolean on_focus_out(GtkWidget *w, GdkEventFocus *ev, gpointer ud)
 static gboolean on_timeout(gpointer ud)
 {
     int i;
-    unit_t u;
-    if (!units)
-        create_units();
+    float d;
+    unit_t *u;
+    GArray *s;
+    if(!units)
+        units = g_array_new(TRUE, TRUE, sizeof(unit_t));
+    s = g_array_new(TRUE, TRUE, sizeof(int));
     for(i = 0; i < units->len; ++i) {
-        u = g_array_index(units, unit_t, i);
+        u = &g_array_index(units, unit_t, i);
+        d = sqrt(u->x*u->x + u->y*u->y);
+        u->x -= u->x/d*speed;
+        u->y -= u->y/d*speed;
+        if(d < 50)
+            g_array_prepend_val(s, i);
     }
+    for(i = 0; i < s->len; ++i) {
+        g_free(g_array_index(units, unit_t, g_array_index(s, int, i)).v);
+        g_array_remove_index_fast(units, g_array_index(s, int, i));
+        hp--;
+    }
+    g_array_free(s, TRUE);
     gtk_widget_queue_draw(GTK_WIDGET(ud));
+    if(hp <=0)
+        return FALSE;
+    else
+        return TRUE;
+}
+
+static gboolean on_timeout2(gpointer ud)
+{
+    double a;
+    int i;
+    unit_t t;
+    for(i = 0; i < 3; ++i) {
+        a = (random() % 360) / 360. * 2*M_PI;
+        t.v = generate_word();
+        t.x = cos(a) * gwidth/2.;
+        t.y = sin(a) * gwidth/2.;
+        g_array_append_val(units, t);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -130,7 +234,7 @@ int main(int argc, char *argv[])
 
     srandom(time(NULL));
 
-    speed = 1./30.;
+    speed = 20./30.;
 
     frame = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(frame), "Type War");
@@ -150,6 +254,8 @@ int main(int argc, char *argv[])
 	g_signal_connect(G_OBJECT(frame), "focus-out-event", G_CALLBACK(on_focus_out), imctx);
 
     gtk_widget_show_all(frame);
+    g_timeout_add(33, on_timeout, da);
+    g_timeout_add(3000, on_timeout2, NULL);
 
     gtk_main();
     return 0;
