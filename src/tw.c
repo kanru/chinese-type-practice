@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2008 Kanru Chen
+ *  
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 #include <gtk/gtk.h>
 #include <glib.h>
 #include <pango/pangocairo.h>
@@ -14,11 +36,14 @@ struct unit
 };
 typedef struct unit unit_t;
 
+const double fps = 30.;
+const double speed = 20.; /* pixel */
+
 int gwidth, gheight;
 GArray *units;
 int score;
 int hp = 100;
-float speed;
+double move_offset;
 
 /**
  * Range: 4421-7D4B
@@ -193,8 +218,8 @@ static gboolean on_timeout(gpointer ud)
     for(i = 0; i < units->len; ++i) {
         u = &g_array_index(units, unit_t, i);
         d = sqrt(u->x*u->x + u->y*u->y);
-        u->x -= u->x/d*speed;
-        u->y -= u->y/d*speed;
+        u->x -= u->x/d*move_offset;
+        u->y -= u->y/d*move_offset;
         if(d < 50)
             g_array_prepend_val(s, i);
     }
@@ -234,7 +259,7 @@ int main(int argc, char *argv[])
 
     srandom(time(NULL));
 
-    speed = 20./30.;
+    move_offset = speed/fps;
 
     frame = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(frame), "Type War");
