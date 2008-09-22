@@ -281,6 +281,10 @@ static gboolean on_timeout2(gpointer ud)
         t.y = sin(a) * gwidth/2.;
         g_array_append_val(units, t);
     }
+    if(hp <=0)
+        return FALSE;
+    else
+        return TRUE;
 }
 
 static void parse_input_file(gchar *file)
