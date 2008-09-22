@@ -93,7 +93,7 @@ static gchar* generate_word_from_file()
 
 static gchar* generate_word()
 {
-    if (input_file)
+    if (input_units)
         return generate_word_from_file();
     else
         return generate_word_from_big5();
