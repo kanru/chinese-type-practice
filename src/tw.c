@@ -63,7 +63,10 @@ static gchar* generate_word()
     } while (w <= 0x20 || w > (in[2] == 0xFD ? 0x4B : 0x7D));
     in[3] += w;
     out = g_convert(in, sizeof(in), "UTF-8", "EUC-TW", NULL, NULL, NULL);
-    return out;
+    if (out)
+        return out;
+    else
+        return generate_word();
 }
 
 static void display_gameover(cairo_t *cr)
