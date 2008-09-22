@@ -40,6 +40,7 @@ typedef struct unit unit_t;
 /* Global settings */
 static double speed = 20.; /* pixel */
 static int hp = 100;
+static int freq = 3000;
 static gchar *input_file;
 
 /* Internal stuff */
@@ -52,9 +53,10 @@ static double move_offset;
 
 static GOptionEntry entries[] = 
 {
-    { "file", 'f', 0, G_OPTION_ARG_FILENAME, &input_file, "Input file for user defined word list", "FILE" },
+    { "file", 'i', 0, G_OPTION_ARG_FILENAME, &input_file, "Input file for user defined word list", "FILE" },
     { "speed", 's', 0, G_OPTION_ARG_DOUBLE, &speed, "Initial speed, default 20.0", "SPEED"},
     { "hp", 0, 0, G_OPTION_ARG_INT, &hp, "Initial hit point, default 100", "HP"},
+    { "freq", 'f', 0, G_OPTION_ARG_INT, &freq, "Words generation frequency in microsecond, default 3000", "FREQ"},
     { NULL }
 };
 
@@ -358,7 +360,7 @@ int main(int argc, char *argv[])
 
     gtk_widget_show_all(frame);
     g_timeout_add(33, on_timeout, da);
-    g_timeout_add(3000, on_timeout2, NULL);
+    g_timeout_add(freq, on_timeout2, NULL);
 
     gtk_main();
     return 0;
