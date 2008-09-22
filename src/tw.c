@@ -27,6 +27,7 @@
 #include <math.h>
 #include <time.h>
 #include <string.h>
+#include <fcntl.h>
 
 struct unit
 {
@@ -36,20 +37,32 @@ struct unit
 };
 typedef struct unit unit_t;
 
-const double fps = 30.;
-const double speed = 20.; /* pixel */
+/* Global settings */
+static double speed = 20.; /* pixel */
+static int hp = 100;
+static gchar *input_file;
 
-int gwidth, gheight;
-GArray *units;
-int score;
-int hp = 100;
-double move_offset;
+/* Internal stuff */
+static double fps = 30.;
+static int gwidth, gheight;
+static GArray *units;
+static GPtrArray *input_units;
+static int score;
+static double move_offset;
+
+static GOptionEntry entries[] = 
+{
+    { "file", 'f', 0, G_OPTION_ARG_FILENAME, &input_file, "Input file for user defined word list", "FILE" },
+    { "speed", 's', 0, G_OPTION_ARG_DOUBLE, &speed, "Initial speed, default 20.0", "SPEED"},
+    { "hp", 0, 0, G_OPTION_ARG_INT, &hp, "Initial hit point, default 100", "HP"},
+    { NULL }
+};
 
 /**
  * Range: 4421-7D4B
  * EUC-TW: 0x8EA18080
  */
-static gchar* generate_word()
+static gchar* generate_word_from_big5()
 {
     guchar in[] = {0x8E, 0xA1, 0x80, 0x80};
     gchar *out;
@@ -66,7 +79,22 @@ static gchar* generate_word()
     if (out)
         return out;
     else
-        return generate_word();
+        return generate_word_from_big5();
+}
+
+static gchar* generate_word_from_file()
+{
+    int idx;
+    idx = random() % input_units->len;
+    return g_strdup(g_ptr_array_index(input_units, idx));
+}
+
+static gchar* generate_word()
+{
+    if (input_file)
+        return generate_word_from_file();
+    else
+        return generate_word_from_big5();
 }
 
 static void display_gameover(cairo_t *cr)
@@ -253,10 +281,57 @@ static gboolean on_timeout2(gpointer ud)
     }
 }
 
+static void parse_input_file(gchar *file)
+{
+    gchar inc[11];
+    gchar *it = inc;
+    gchar *end = &inc[10];
+    int fin = -1;
+    ssize_t rn = 0;
+
+    fin = g_open(file, O_RDONLY);
+    if (fin<0) {
+        perror(file);
+        return;
+    }
+    if (!input_units)
+        input_units = g_ptr_array_new();
+    memset(inc, 0, sizeof(inc));
+    for (;;) {
+        rn = read(fin, it, sizeof(gchar));
+        if (!rn) {
+            close(fin);
+            break;
+        }
+        if (it != end && *it != ' ' && *it != '\t' && *it != '\n')
+                it += rn;
+        else {
+            memset(inc, 0, sizeof(inc));
+            it = inc;
+        }
+        if (g_utf8_validate(inc, -1, NULL)) {
+            g_ptr_array_add(input_units, g_strdup(inc));
+            memset(inc, 0, sizeof(inc));
+            it = inc;
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     GtkWidget *frame, *da;
     GtkIMContext *imctx;
+
+    GError *error = NULL;
+    GOptionContext *context;
+
+    context = g_option_context_new("- chinese typing practice");
+    g_option_context_add_main_entries(context, entries, NULL);
+    g_option_context_add_group(context, gtk_get_option_group (TRUE));
+    g_option_context_parse(context, &argc, &argv, &error);
+
+    if (input_file)
+        parse_input_file(input_file);
 
     gtk_init(&argc, &argv);
 
