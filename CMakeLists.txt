@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.6)
 project(TypeWar)
 
+set(CMAKE_BUILD_TYPE Release)
+
 include(FindPkgConfig)
 pkg_check_modules(GTK2 REQUIRED gtk+-2.0>=2.10)
 
