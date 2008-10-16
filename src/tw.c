@@ -219,13 +219,6 @@ static gboolean im_commit(GtkIMContext *imctx, gchar *str, gpointer ud)
 static gboolean on_key_pressed(GtkWidget *w, GdkEventKey *ev, gpointer ud)
 {
     gboolean ret = gtk_im_context_filter_keypress(GTK_IM_CONTEXT(ud), ev);
-    switch(ev->keyval) {
-        case 'q':
-            gtk_im_context_set_client_window(GTK_IM_CONTEXT(ud), NULL);
-            gtk_im_context_focus_out(GTK_IM_CONTEXT(ud));
-            gtk_main_quit();
-            break;
-    }
     return ret;
 }
 
