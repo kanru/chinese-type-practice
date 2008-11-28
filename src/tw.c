@@ -304,11 +304,12 @@ static void parse_input_file(gchar *file)
             close(fin);
             break;
         }
-        if (it != end && *it != ' ' && *it != '\t' && *it != '\n')
+        if (it != end && !isspace(*it))
                 it += rn;
         else {
             memset(inc, 0, sizeof(inc));
             it = inc;
+            continue;
         }
         if (g_utf8_validate(inc, -1, NULL)) {
             g_ptr_array_add(input_units, g_strdup(inc));
